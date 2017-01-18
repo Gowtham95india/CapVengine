@@ -50,7 +50,41 @@ app.post('/user-activity-poc',function(req, res) {
 
     producer.on('error', function(err){
         console.log(err); 
-        res.status(500).send("Oh uh, something went wrong");
+        res.status(500);
+    })
+    res.end();
+});
+
+
+app.post('/fireme',function(req, res) {
+
+    // console.log(req.body);
+    var date = new Date().toISOString().toString('utf8');
+    try {
+        var store = JSON.parse(JSON.stringify(req.body).toString('utf8').replace("'",'"'));
+    }
+    catch (e) {
+        var store = [];
+        console.log("Error in JSON Parsing!");
+    }
+
+    payloads = [];
+
+    // Only realtime events. Convert timestamp to ISOstring format.
+    // store[eve].timestamp = new Date(store[eve].timestamp * 1000).toISOString().toString('utf8');
+    store.timestamp = date;
+    temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store), partition: 0 };
+    payloads.push(temp_obj);
+
+    // producer.on('ready', function(){
+        producer.send(payloads, function(err, data){
+                console.log(data);  
+        });
+    // });
+
+    producer.on('error', function(err){
+        console.log(err); 
+        res.status(500);
     })
     res.end();
 });
