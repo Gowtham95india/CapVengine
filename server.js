@@ -45,7 +45,7 @@ app.post('/user-activity-poc',function(req, res) {
         var currentUTCTime = new Date();
         var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
         store[eve].event_day = currentUTCTime.toLocaleString().split(',')[0];
-        store[eve].event_day_ist = currentISTTime.toLocaleString.split(',')[0];
+        store[eve].event_day_ist = currentISTTime.toLocaleString().split(',')[0];
 
         temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store[eve]), partition: 0 };
         payloads.push(temp_obj);
