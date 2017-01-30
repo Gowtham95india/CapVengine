@@ -36,9 +36,25 @@ app.post('/user-activity-poc',function(req, res) {
     payloads = [];
 
     for (eve=0;eve<store.length;eve++){
+	// Sometimes event_properties is missing. Addding empty one if not present.!
+	if(!store[eve].event_properties){
+		store[eve].event_properties = {};
+		console.log("Event Properties Missing!");
+	}
+
         // Only realtime events. Convert timestamp to ISOstring format.
-        store[eve].timestamp = new Date(store[eve].timestamp * 1000).toISOString().toString('utf8');
-        //Uncomment the following just in case to capture older events.
+	// Timestamps can be in milliseconds/microseconds.
+	if(store[eve].timestamp > 100000000000000){
+		store[eve].timestamp = Math.round(store[eve].timestamp/1000);
+	}	
+	else if(store[eve].timestamp > 100000000000){
+		store[eve].timestamp = Math.floor(store[eve].timestamp);
+	}
+	else{
+		store[eve].timestamp = store[eve].timestamp * 1000;
+	}
+        store[eve].timestamp = new Date(store[eve].timestamp).toISOString().toString('utf8');
+        // Uncomment the following just in case to capture older events.
         // store[eve].timestamp = new Date().toISOString().toString('utf8');
 
         // Adding event_day IST and UTC format.
@@ -46,11 +62,11 @@ app.post('/user-activity-poc',function(req, res) {
         var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
         store[eve].event_day = currentUTCTime.toLocaleString().split(',')[0];
         store[eve].event_day_ist = currentISTTime.toLocaleString().split(',')[0];
-	store[eve].advertiser_id_met =  advertiser_id;
-	store[eve].device_id_met =  device_id;
-	store[eve].seller_met =  seller;
-	store[eve].brand_met =  Brand;
-	store[eve].product_size_met =  product_size;
+	store[eve].advertiser_id_met = store[eve].advertiser_id;
+	store[eve].device_id_met = store[eve].device_id;
+	store[eve].seller_met = store[eve].event_properties.Seller;
+	store[eve].brand_met = store[eve].event_properties['Brand Name'];
+	store[eve].product_size_met = store[eve].event_properties.Size;
 
         temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store[eve]), partition: 0 };
         payloads.push(temp_obj);
@@ -90,7 +106,9 @@ app.post('/fireme',function(req, res) {
     var currentUTCTime = new Date();
     var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     store.event_day = currentUTCTime.toLocaleString().split(',')[0];
-    store.event_day_ist = currentISTTime.toLocaleString.split(',')[0];
+    store.event_day_ist = currentISTTime.toLocaleString().split(',')[0];
+    store.advertiser_id_met = store.advertiser_id;
+    store.device_id_met = store.device_id;
 
     temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store), partition: 0 };
     payloads.push(temp_obj);
