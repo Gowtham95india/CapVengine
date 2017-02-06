@@ -12,17 +12,17 @@ app.use(bodyParser.json());     // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodies
 
 var kafka = require('kafka-node'),
-var Producer = kafka.Producer,
-var client = new kafka.Client('10.2.1.239:2181'),
-var producer = new Producer(client);
+    Producer = kafka.Producer,
+    client = new kafka.Client('10.2.1.239:2181'),
+    producer = new Producer(client);
 
 app.listen(port);
 console.log('Server started! At http://localhost:' + port);
 
 function statsCollector(req, res) {
 
-    // console.log(req.body);
-    // console.log(req.get('content-type'));
+    console.log(req.body);
+    console.log(req.get('content-type'));
     var date = new Date().toISOString().toString('utf8');
     try {
         var store = JSON.parse(JSON.stringify(req.body).toString('utf8').replace("'",'"'));
