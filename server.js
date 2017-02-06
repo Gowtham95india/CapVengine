@@ -12,16 +12,17 @@ app.use(bodyParser.json());     // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodies
 
 var kafka = require('kafka-node'),
-    Producer = kafka.Producer,
-    client = new kafka.Client(),
-    producer = new Producer(client);
+var Producer = kafka.Producer,
+var client = new kafka.Client('10.2.1.239:2181'),
+var producer = new Producer(client);
 
 app.listen(port);
 console.log('Server started! At http://localhost:' + port);
 
-app.post('/user-activity-poc',function(req, res) {
+function statsCollector(req, res) {
 
     // console.log(req.body);
+    // console.log(req.get('content-type'));
     var date = new Date().toISOString().toString('utf8');
     try {
         var store = JSON.parse(JSON.stringify(req.body).toString('utf8').replace("'",'"'));
@@ -30,22 +31,44 @@ app.post('/user-activity-poc',function(req, res) {
     catch (e) {
         var store = [];
         console.log("Error in JSON Parsing!");
-        res.status(400);
+        return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
     payloads = [];
 
     for (eve=0;eve<store.length;eve++){
+        // Sometimes event_properties is missing. Addding empty one if not present.!
+        if(!store[eve].event_properties){
+            store[eve].event_properties = {};
+            console.log("Event Properties Missing!");
+        }
+
         // Only realtime events. Convert timestamp to ISOstring format.
-        store[eve].timestamp = new Date(store[eve].timestamp * 1000).toISOString().toString('utf8');
-        //Uncomment the following just in case to capture older events.
-        // store[eve].timestamp = new Date().toISOString().toString('utf8');
+        // Timestamps can be in milliseconds/microseconds.
+        if(store[eve].timestamp > 100000000000000){
+            store[eve].timestamp = Math.round(store[eve].timestamp/1000);
+        }
+        else if(store[eve].timestamp > 100000000000){
+            store[eve].timestamp = Math.floor(store[eve].timestamp);
+        }
+        else{
+            store[eve].timestamp = store[eve].timestamp * 1000;
+        }
+        store[eve].timestamp = new Date(store[eve].timestamp).toISOString().toString('utf8');
+        // Uncomment the following just in case to capture older events.
+        // store[eve].timestamp = new Date().toISOString().toString('utf8'); // Setting timestamp to current time.
 
         // Adding event_day IST and UTC format.
+        console.log(store[eve].timestamp);
         var currentUTCTime = new Date();
         var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
         store[eve].event_day = currentUTCTime.toLocaleString().split(',')[0];
-        store[eve].event_day_ist = currentISTTime.toLocaleString.split(',')[0];
+        store[eve].event_day_ist = currentISTTime.toLocaleString().split(',')[0];
+        store[eve].advertiser_id_met = store[eve].advertiser_id;
+        store[eve].device_id_met = store[eve].device_id;
+        store[eve].seller_met = store[eve].event_properties.Seller;
+        store[eve].brand_met = store[eve].event_properties['Brand Name'];
+        store[eve].product_size_met = store[eve].event_properties.Size;
 
         temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store[eve]), partition: 0 };
         payloads.push(temp_obj);
@@ -53,15 +76,20 @@ app.post('/user-activity-poc',function(req, res) {
 
     producer.send(payloads, function(err, data){
         console.log(data);
+        return res.status(200).json({ "status": false, "message": "OK" });
     });
 
     producer.on('error', function(err){
-        console.log(err); 
-        res.status(500);
+        console.log(err);
+        return res.status(500).json({ "status": false, "message": "broker not available" });
     })
+    
     res.end();
-});
 
+}
+
+app.post('/user-activity-poc', statsCollector);
+app.post('/stats', statsCollector);
 
 app.post('/fireme',function(req, res) {
 
@@ -85,17 +113,19 @@ app.post('/fireme',function(req, res) {
     var currentUTCTime = new Date();
     var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     store.event_day = currentUTCTime.toLocaleString().split(',')[0];
-    store.event_day_ist = currentISTTime.toLocaleString.split(',')[0];
+    store.event_day_ist = currentISTTime.toLocaleString().split(',')[0];
+    store.advertiser_id_met = store.advertiser_id;
+    store.device_id_met = store.device_id;
 
     temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store), partition: 0 };
     payloads.push(temp_obj);
 
     producer.send(payloads, function(err, data){
-            console.log(data);  
+            console.log(data);
     });
 
     producer.on('error', function(err){
-        console.log(err); 
+        console.log(err);
         res.status(500);
     })
     res.end();
