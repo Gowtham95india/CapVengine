@@ -55,6 +55,27 @@ var statsCollector = function(req, res) {
     payloads = [];
 
     for (eve=0;eve<store.length;eve++){
+
+        // Only realtime events. Convert timestamp to ISOstring format.
+        // Timestamps can be in milliseconds/microseconds.
+        if(store[eve].timestamp > 100000000000000){
+            store[eve].timestamp = Math.round(store[eve].timestamp/1000);
+        }
+        else if(store[eve].timestamp > 100000000000){
+            store[eve].timestamp = Math.floor(store[eve].timestamp);
+        }
+        else{
+            store[eve].timestamp = store[eve].timestamp * 1000;
+        }
+        store[eve].timestamp = new Date(store[eve].timestamp).toISOString().toString('utf8');
+        // Uncomment the following just in case to capture older events.
+        // store[eve].timestamp = new Date().toISOString().toString('utf8'); // Setting timestamp to current time.
+
+        // Adding event_day IST and UTC format.
+        console.log(store[eve].timestamp);
+        var currentUTCTime = new Date();
+        var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+
         // Sometimes event_properties is missing. Addding empty one if not present.!
         if(!store[eve].event_properties){
             store[eve].event_properties = {};
@@ -113,34 +134,17 @@ var statsCollector = function(req, res) {
             store[eve].user_id = store[eve].user_id || redis_result.user_id;
             store[eve].email = store[eve].email || redis_result.email;
 
-            if (store[eve].event_type=="NEW_APP_INSTALLS") {
+            if (store[eve].event_type == "NEW_APP_INSTALLS"){
+                // Helps in deciding the uninstalls attributions %.
+                data_dict.user_installed_medium = redis_result.medium;
+                data_dict.user_installed_source = redis_result.source;
+                data_dict.user_installed_campaign = redis_result.campaign;
 
-                data_dict = redis_result;
-                // data_dict.user_installed_at = 
             }
-
         }
 
+        redis.set(store[eve].device_id, JSON.stringify(data_dict)); // Never expired details about user.
 
-        // Only realtime events. Convert timestamp to ISOstring format.
-        // Timestamps can be in milliseconds/microseconds.
-        if(store[eve].timestamp > 100000000000000){
-            store[eve].timestamp = Math.round(store[eve].timestamp/1000);
-        }
-        else if(store[eve].timestamp > 100000000000){
-            store[eve].timestamp = Math.floor(store[eve].timestamp);
-        }
-        else{
-            store[eve].timestamp = store[eve].timestamp * 1000;
-        }
-        store[eve].timestamp = new Date(store[eve].timestamp).toISOString().toString('utf8');
-        // Uncomment the following just in case to capture older events.
-        // store[eve].timestamp = new Date().toISOString().toString('utf8'); // Setting timestamp to current time.
-
-        // Adding event_day IST and UTC format.
-        console.log(store[eve].timestamp);
-        var currentUTCTime = new Date();
-        var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
         store[eve].event_day = currentUTCTime.toLocaleString().split(',')[0];
         store[eve].event_day_ist = currentISTTime.toLocaleString().split(',')[0];
         store[eve].advertiser_id_met = store[eve].advertiser_id;
