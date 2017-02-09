@@ -115,15 +115,14 @@ var statsCollector = function(req, res) {
             redis_result = result;
         })
 
-        var data_dict = {} // Redis Write Object
-
         if(store[eve].event_type == "Session-Started") {
 
-            data_dict.medium = store[eve].event_properties.utm_medium = medium;
-            data_dict.source = store[eve].event_properties.utm_source = source;
-            data_dict.campaign = store[eve].event_properties.utm_campaign = campaign;
-            data_dict.user_id = store[eve].user_id = store[eve].user_id || redis_result.user_id;
-            data_dict.email = store[eve].email = store[eve].email || redis_result.email;
+            // Redis data should be updated with current app session details.
+            redis_result.medium = store[eve].event_properties.utm_medium = medium;
+            redis_result.source = store[eve].event_properties.utm_source = source;
+            redis_result.campaign = store[eve].event_properties.utm_campaign = campaign;
+            redis_result.user_id = store[eve].user_id = store[eve].user_id || redis_result.user_id;
+            redis_result.email = store[eve].email = store[eve].email || redis_result.email;
 
         }
         else {
@@ -136,14 +135,14 @@ var statsCollector = function(req, res) {
 
             if (store[eve].event_type == "NEW_APP_INSTALLS"){
                 // Helps in deciding the uninstalls attributions %.
-                data_dict.user_installed_medium = redis_result.medium;
-                data_dict.user_installed_source = redis_result.source;
-                data_dict.user_installed_campaign = redis_result.campaign;
+                redis_result.user_installed_medium = redis_result.medium;
+                redis_result.user_installed_source = redis_result.source;
+                redis_result.user_installed_campaign = redis_result.campaign;
 
             }
         }
 
-        redis.set(store[eve].device_id, JSON.stringify(data_dict)); // Never expired details about user.
+        redis.set(store[eve].device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
         store[eve].event_day = currentUTCTime.toLocaleString().split(',')[0];
         store[eve].event_day_ist = currentISTTime.toLocaleString().split(',')[0];
