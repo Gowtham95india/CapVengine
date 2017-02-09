@@ -1,9 +1,12 @@
-var nr = require('newrelic');
 var express  = require('express');
 app = express();
 var port = process.env.PORT || 8080;
 var bodyParser = require('body-parser');
-var fs=require("fs");
+var fs = require("fs");
+var freegeoip = require('node-freegeoip');
+
+var Redis = require('ioredis');
+var redis = new Redis();
 
 var Converter = require("csvtojson").Converter;
 var converter = new Converter({});
@@ -19,7 +22,22 @@ var kafka = require('kafka-node'),
 app.listen(port);
 console.log('Server started! At http://localhost:' + port);
 
-function statsCollector(req, res) {
+redis.on("connect", function(res){
+    console.log("Redis started! Ready to perform");
+});
+
+var getClientAddress = function (req) {
+    return (req.get('x-forwarded-for') || '').split(',')[0]  || req.connection.remoteAddress;
+}
+
+var getClientLocation = function (ipaddress, callback) {
+    freegeoip.getLocation(ipaddress, function(err, location) {
+        if (err) throw err;
+        return callback(location);
+    });
+}
+
+var statsCollector = function(req, res) {
 
     console.log(req.body);
     console.log(req.get('content-type'));
@@ -42,6 +60,67 @@ function statsCollector(req, res) {
             store[eve].event_properties = {};
             console.log("Event Properties Missing!");
         }
+
+        // Tweaking for location data if lat is not present.
+        if(!store[eve].lat){
+            clientIp = getClientAddress(req);
+            getClientLocation(clientIp, function(resp) {
+                store[eve].country = store[eve].country || resp.country_name;
+                store[eve].region = store[eve].region || resp.region_name;
+                store[eve].city = store[eve].city || resp.city;
+                store[eve].lat = store[eve].lat || resp.latitude;
+                store[eve].lng =  store[eve].lng || resp.longitude;
+            });
+
+        }
+
+        var medium = store[eve].event_properties.utm_medium
+        var source = sotre[eve].event_properties.utm_source
+        var campaign = store[eve].event_properties.utm_campaign
+        // Correcting UTM Sources from App Event
+        if (!medium && !campaign && !source){
+          medium = source = campign = "Direct"
+        }
+        else{
+          medium = medium || source || campaign || "Direct"
+          source = source || medium || campaign
+          campaign = campign || medium || source
+        }
+
+        // Call get on redis only once and store it.
+        var redis_result = "";
+        redis.get(store[eve].device_id, function(jresult){
+            result = JSON.parse(jresult);
+            redis_result = result;
+        })
+
+        var data_dict = {} // Redis Write Object
+
+        if(store[eve].event_type == "Session-Started") {
+
+            data_dict.medium = store[eve].event_properties.utm_medium = medium;
+            data_dict.source = store[eve].event_properties.utm_source = source;
+            data_dict.campaign = store[eve].event_properties.utm_campaign = campaign;
+            data_dict.user_id = store[eve].user_id = store[eve].user_id || redis_result.user_id;
+            data_dict.email = store[eve].email = store[eve].email || redis_result.email;
+
+        }
+        else {
+
+            store[eve].event_properties.utm_medium = redis_result.medium;
+            store[eve].event_properties.utm_source = redis_result.source;
+            store[eve].event_properties.utm_campaign = redis_result.campaign;
+            store[eve].user_id = store[eve].user_id || redis_result.user_id;
+            store[eve].email = store[eve].email || redis_result.email;
+
+            if (store[eve].event_type=="NEW_APP_INSTALLS") {
+
+                data_dict = redis_result;
+                // data_dict.user_installed_at = 
+            }
+
+        }
+
 
         // Only realtime events. Convert timestamp to ISOstring format.
         // Timestamps can be in milliseconds/microseconds.
@@ -81,12 +160,13 @@ function statsCollector(req, res) {
 
     producer.on('error', function(err){
         console.log(err);
-        return res.status(500).json({ "status": false, "message": "broker not available" });
+        return res.status(500).json({ "status": false, "message": "Broker Not Available" });
     })
     
     res.end();
 
 }
+
 
 app.post('/user-activity-poc', statsCollector);
 app.post('/stats', statsCollector);

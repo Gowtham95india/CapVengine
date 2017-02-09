@@ -5,6 +5,8 @@
     "@newrelic/native-metrics": "^1.0.0",
     "csvtojson": "^1.0.2",
     "express": "~4.10.2",
-    "newrelic": "^1.36.0"
+    "ioredis": "^2.5.0",
+    "newrelic": "^1.36.0",
+    "node-freegeoip": "0.0.1"
   }
 }
