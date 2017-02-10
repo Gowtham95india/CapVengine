@@ -54,9 +54,10 @@ var getTimeStamp = function(timestamp) {
         else{
             timestamp = timestamp * 1000;
         }
+        return timestamp;
     }
     else {
-
+        return new Date().toISOString().toString('utf8');
     }
 }
 
@@ -198,11 +199,9 @@ app.post('/fireme',function(req, res) {
 
     payloads = [];
 
-    // Only realtime events. Convert timestamp to ISOstring format.
-    // store[eve].timestamp = new Date(store[eve].timestamp * 1000).toISOString().toString('utf8');
-    store.timestamp = date;
+    store.timestamp = getTimeStamp(); // Should be tagged with current timestamp.
 
-        // Adding event_day IST and UTC format.
+    // Adding event_day IST and UTC format.
     var currentUTCTime = new Date();
     var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     store.event_day = currentUTCTime.toLocaleString().split(',')[0];
