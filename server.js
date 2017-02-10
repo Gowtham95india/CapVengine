@@ -37,17 +37,38 @@ var getClientLocation = function (ipaddress, callback) {
     });
 }
 
-var statsCollector = function(req, res) {
+// If timestamp is not present, returns ISO format current timestamp.
+var getTimeStamp = function(timestamp) {
+    
+    // If no timestamp given, should return current timestamp.
+    if(timestamp) {
 
-    console.log(req.body);
-    console.log(req.get('content-type'));
+        // Only realtime events. Convert timestamp to ISOstring format.
+        // Timestamps can be in milliseconds/microseconds.
+        if(timestamp > 100000000000000){
+            timestamp = Math.round(timestamp/1000);
+        }
+        else if(timestamp > 100000000000){
+            timestamp = Math.floor(timestamp);
+        }
+        else{
+            timestamp = timestamp * 1000;
+        }
+    }
+    else {
+
+    }
+}
+
+var statsCollector = function(req, res) {
+    // console.log(req.body);
+    // console.log(req.get('content-type'));
     var date = new Date().toISOString().toString('utf8');
     try {
         var store = JSON.parse(JSON.stringify(req.body).toString('utf8').replace("'",'"'));
         store = JSON.parse(store.e); // Getting events list
     }
     catch (e) {
-        var store = [];
         console.log("Error in JSON Parsing!");
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
@@ -56,18 +77,8 @@ var statsCollector = function(req, res) {
 
     for (eve=0;eve<store.length;eve++){
 
-        // Only realtime events. Convert timestamp to ISOstring format.
-        // Timestamps can be in milliseconds/microseconds.
-        if(store[eve].timestamp > 100000000000000){
-            store[eve].timestamp = Math.round(store[eve].timestamp/1000);
-        }
-        else if(store[eve].timestamp > 100000000000){
-            store[eve].timestamp = Math.floor(store[eve].timestamp);
-        }
-        else{
-            store[eve].timestamp = store[eve].timestamp * 1000;
-        }
-        store[eve].timestamp = new Date(store[eve].timestamp).toISOString().toString('utf8');
+        var timestamp = getTimeStamp(store[eve].timestamp)
+        store[eve].timestamp = new Date(timestamp).toISOString().toString('utf8');
         // Uncomment the following just in case to capture older events.
         // store[eve].timestamp = new Date().toISOString().toString('utf8'); // Setting timestamp to current time.
 
@@ -177,13 +188,12 @@ app.post('/stats', statsCollector);
 app.post('/fireme',function(req, res) {
 
     // console.log(req.body);
-    var date = new Date().toISOString().toString('utf8');
     try {
         var store = JSON.parse(JSON.stringify(req.body).toString('utf8').replace("'",'"'));
     }
     catch (e) {
-        var store = [];
         console.log("Error in JSON Parsing!");
+        return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
     payloads = [];
