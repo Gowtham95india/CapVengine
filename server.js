@@ -152,7 +152,7 @@ var statsCollector = function(req, res) {
         store[eve].brand_met = store[eve].event_properties['Brand Name'];
         store[eve].product_size_met = store[eve].event_properties.Size;
 
-         var temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store[eve]), partition: 0 };
+        var temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store[eve]), partition: 0 };
         payloads.push(temp_obj);
     }
 
