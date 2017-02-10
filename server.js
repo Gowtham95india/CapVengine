@@ -37,6 +37,14 @@ var getClientLocation = function (ipaddress, callback) {
     });
 }
 
+var getRedisResult = function (device_id, callback) {
+    // Call get on redis only once and store it.
+    redis.get(store[eve].device_id, function(jresult){
+        result = JSON.parse(jresult);
+        return result;
+    });
+}
+
 // If timestamp is not present, returns ISO format current timestamp.
 var getTimeStamp = function(timestamp) {
     
@@ -122,10 +130,10 @@ var statsCollector = function(req, res) {
 
         // Call get on redis only once and store it.
         var redis_result = "";
-        redis.get(store[eve].device_id, function(jresult){
+        getRedisResult(store[eve].device_id, function(jresult){
             result = JSON.parse(jresult);
             redis_result = result;
-        })
+        });
 
         if(store[eve].event_type == "Session-Started") {
 
