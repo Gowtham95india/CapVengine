@@ -143,6 +143,7 @@ var statsCollector = function(req, res) {
             redis_result.campaign = store[eve].event_properties.utm_campaign = campaign;
             redis_result.user_id = store[eve].user_id = store[eve].user_id || redis_result.user_id;
             redis_result.email = store[eve].email = store[eve].email || redis_result.email;
+            redis_result.advertiser_id = store[eve].advertiser_id || redis_result.advertiser_id;
 
         }
         else {
@@ -204,6 +205,18 @@ app.post('/fireme',function(req, res) {
         console.log("Error in JSON Parsing!");
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
+
+    // Call get on redis only once and use it for attribution.
+    var redis_result = "";
+    getRedisResult(store[eve].device_id, function(jresult){
+        result = JSON.parse(jresult);
+        redis_result = result;
+    });    
+
+    store.event_properties.utm_medium = redis_result.medium;
+    store.event_properties.utm_source = redis_result.source;
+    store.event_properties.utm_campaign = redis_result.campaign;
+    store.advertiser_id = redis_result.advertiser_id;
 
     payloads = [];
 
