@@ -239,7 +239,9 @@ app.post('/fireme',function(req, res) {
 
     producer.on('error', function(err){
         console.log(err);
-        res.status(500);
+        return res.status(500).json({ "status": false, "message": "Broker Not Available" });
     })
+
     res.end();
+    
 });
