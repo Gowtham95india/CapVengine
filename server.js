@@ -165,7 +165,7 @@ var statsCollector = function(req, res) {
         console.log(err);
         return res.status(500).json({ "status": false, "message": "Broker Not Available" });
     })
-    
+
     res.end();
 
 }
