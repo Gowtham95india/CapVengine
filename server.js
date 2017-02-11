@@ -37,14 +37,6 @@ var getClientLocation = function (ipaddress, callback) {
     });
 }
 
-var getRedisResult = function (device_id, callback) {
-    // Call get on redis only once and store it.
-    redis.get(device_id, function(jresult){
-        result = JSON.parse(jresult);
-        return callback(result);
-    });
-}
-
 // If timestamp is not present, returns ISO format current timestamp.
 var getTimeStamp = function(timestamp) {
 
@@ -133,46 +125,55 @@ var statsCollector = function(req, res) {
         }
 
         // Call get on redis only once and store it.
-        var redis_result = {};
-        getRedisResult(user_event.device_id, function(jresult){
-            result = JSON.parse(jresult);
-            if (result) redis_result = result;
-            else redis_result = {};
-        });
+        var redis_result;
+        redis.get(user_event.device_id).then(function update_user_event(jredis_result) {
 
-        console.log("Lets Check Redis" + JSON.stringify(redis_result));
-        console.log(user_event.event_type == "Session-Started");
-        if(user_event.event_type == "Session-Started") {
+            redis_result = JSON.parse(jredis_result);
 
-            // Redis data should be updated with current app session details.
-            redis_result.medium = user_event.event_properties.utm_medium = medium;
-            redis_result.source = user_event.event_properties.utm_source = source;
-            redis_result.campaign = user_event.event_properties.utm_campaign = campaign;
-            redis_result.user_id = user_event.user_id = user_event.user_id || redis_result.user_id;
-            redis_result.email = user_event.email = user_event.email || redis_result.email;
-            redis_result.advertiser_id = user_event.advertiser_id || redis_result.advertiser_id;
-            console.log(redis_result);
+            console.log("Lets Check Redis" + JSON.stringify(redis_result));
 
-        }
-        else {
+            if(user_event.event_type == "Session-Started") {
 
-            user_event.event_properties.utm_medium = redis_result.medium;
-            user_event.event_properties.utm_source = redis_result.source;
-            user_event.event_properties.utm_campaign = redis_result.campaign;
-            user_event.user_id = user_event.user_id || redis_result.user_id;
-            user_event.email = user_event.email || redis_result.email;
+                console.log(redis_result);
 
-            if (user_event.event_type == "NEW_APP_INSTALLS"){
-                // Helps in deciding the uninstalls attributions %.
-                redis_result.user_installed_medium = redis_result.medium;
-                redis_result.user_installed_source = redis_result.source;
-                redis_result.user_installed_campaign = redis_result.campaign;
+                // Redis data should be updated with current app session details.
+                redis_result.medium = user_event.event_properties.utm_medium = medium;
+                redis_result.source = user_event.event_properties.utm_source = source;
+                redis_result.campaign = user_event.event_properties.utm_campaign = campaign;
+                redis_result.user_id = user_event.user_id = user_event.user_id || redis_result.user_id;
+                redis_result.email = user_event.email = user_event.email || redis_result.email;
+                redis_result.advertiser_id = user_event.advertiser_id || redis_result.advertiser_id;
+                console.log("Inside Session-Started");
+                console.log(redis_result);
+
+                redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
             }
-        }
+            else {
 
-        console.log(redis_result); // Logging redis data to check.
-        redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
+                user_event.event_properties.utm_medium = redis_result.medium;
+                user_event.event_properties.utm_source = redis_result.source;
+                user_event.event_properties.utm_campaign = redis_result.campaign;
+                user_event.user_id = user_event.user_id || redis_result.user_id;
+                user_event.email = user_event.email || redis_result.email;
+
+                if (user_event.event_type == "NEW_APP_INSTALLS"){
+                    // Helps in deciding the uninstalls attributions %.
+                    redis_result.user_installed_medium = redis_result.medium;
+                    redis_result.user_installed_source = redis_result.source;
+                    redis_result.user_installed_campaign = redis_result.campaign;
+
+                    redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
+
+                }
+            }
+        
+            console.log(redis_result); // Logging redis data to check.
+            
+
+        });
+
+        
 
         user_event.event_day = currentUTCTime.toLocaleString().split(',')[0];
         user_event.event_day_ist = currentISTTime.toLocaleString().split(',')[0];
