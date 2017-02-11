@@ -16,7 +16,7 @@ app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodie
 
 var kafka = require('kafka-node'),
     Producer = kafka.Producer,
-    client = new kafka.Client('10.2.1.239:2181'),
+    client = new kafka.Client('34.154.148.149:2181'),
     producer = new Producer(client);
 
 app.listen(port);
@@ -85,41 +85,43 @@ var statsCollector = function(req, res) {
 
     payloads = [];
 
-    for (eve=0;eve<store.length;eve++){
+    store.forEach(function(user_event) {
 
-        var timestamp = getTimeStamp(store[eve].timestamp)
-        store[eve].timestamp = new Date(timestamp).toISOString().toString('utf8');
+        var timestamp = getTimeStamp(user_event.timestamp)
+        user_event.timestamp = new Date(timestamp).toISOString().toString('utf8');
         // Uncomment the following just in case to capture older events.
-        // store[eve].timestamp = new Date().toISOString().toString('utf8'); // Setting timestamp to current time.
+        // user_event.timestamp = new Date().toISOString().toString('utf8'); // Setting timestamp to current time.
 
         // Adding event_day IST and UTC format.
-        console.log(store[eve].timestamp);
+        console.log(user_event.timestamp);
         var currentUTCTime = new Date();
         var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
 
         // Sometimes event_properties is missing. Addding empty one if not present.!
-        if(!store[eve].event_properties){
-            store[eve].event_properties = {};
+        if(!user_event.event_properties){
+            user_event.event_properties = {};
             console.log("Event Properties Missing!");
         }
 
         // Tweaking for location data if lat is not present.
-        if(!store[eve].lat){
+        if(!user_event.lat){
             clientIp = getClientAddress(req);
             getClientLocation("121.244.122.142", function(resp) {
-                console.log(resp);
-                store[eve].country = store[eve].country || resp.country_name;
-                store[eve].region = store[eve].region || resp.region_name;
-                store[eve].city = store[eve].city || resp.city;
-                store[eve].lat = store[eve].lat || resp.latitude;
-                store[eve].lng =  store[eve].lng || resp.longitude;
+
+                user_event.country = user_event.country || resp.country_name;
+                user_event.region = user_event.region || resp.region_name;
+                user_event.city = user_event.city || resp.city;
+                user_event.lat = user_event.lat || resp.latitude;
+                user_event.lng =  user_event.lng || resp.longitude;
+                console.log(user_event);
+
             });
 
         }
 
-        var medium = store[eve].event_properties.utm_medium
-        var source = store[eve].event_properties.utm_source
-        var campaign = store[eve].event_properties.utm_campaign
+        var medium = user_event.event_properties.utm_medium
+        var source = user_event.event_properties.utm_source
+        var campaign = user_event.event_properties.utm_campaign
         // Correcting UTM Sources from App Event
         if (!medium && !campaign && !source){
           medium = source = campaign = "Direct"
@@ -131,35 +133,36 @@ var statsCollector = function(req, res) {
         }
 
         // Call get on redis only once and store it.
-        var redis_result = "";
-        getRedisResult(store[eve].device_id, function(jresult){
+        var redis_result = {};
+        getRedisResult(user_event.device_id, function(jresult){
             result = JSON.parse(jresult);
             if (result) redis_result = result;
             else redis_result = {};
         });
 
-        console.log(redis_result);
-
-        if(store[eve].event_type == "Session-Started") {
+        console.log("Lets Check Redis" + JSON.stringify(redis_result));
+        console.log(user_event.event_type == "Session-Started");
+        if(user_event.event_type == "Session-Started") {
 
             // Redis data should be updated with current app session details.
-            redis_result.medium = store[eve].event_properties.utm_medium = medium;
-            redis_result.source = store[eve].event_properties.utm_source = source;
-            redis_result.campaign = store[eve].event_properties.utm_campaign = campaign;
-            redis_result.user_id = store[eve].user_id = store[eve].user_id || redis_result.user_id;
-            redis_result.email = store[eve].email = store[eve].email || redis_result.email;
-            redis_result.advertiser_id = store[eve].advertiser_id || redis_result.advertiser_id;
+            redis_result.medium = user_event.event_properties.utm_medium = medium;
+            redis_result.source = user_event.event_properties.utm_source = source;
+            redis_result.campaign = user_event.event_properties.utm_campaign = campaign;
+            redis_result.user_id = user_event.user_id = user_event.user_id || redis_result.user_id;
+            redis_result.email = user_event.email = user_event.email || redis_result.email;
+            redis_result.advertiser_id = user_event.advertiser_id || redis_result.advertiser_id;
+            console.log(redis_result);
 
         }
         else {
 
-            store[eve].event_properties.utm_medium = redis_result.medium;
-            store[eve].event_properties.utm_source = redis_result.source;
-            store[eve].event_properties.utm_campaign = redis_result.campaign;
-            store[eve].user_id = store[eve].user_id || redis_result.user_id;
-            store[eve].email = store[eve].email || redis_result.email;
+            user_event.event_properties.utm_medium = redis_result.medium;
+            user_event.event_properties.utm_source = redis_result.source;
+            user_event.event_properties.utm_campaign = redis_result.campaign;
+            user_event.user_id = user_event.user_id || redis_result.user_id;
+            user_event.email = user_event.email || redis_result.email;
 
-            if (store[eve].event_type == "NEW_APP_INSTALLS"){
+            if (user_event.event_type == "NEW_APP_INSTALLS"){
                 // Helps in deciding the uninstalls attributions %.
                 redis_result.user_installed_medium = redis_result.medium;
                 redis_result.user_installed_source = redis_result.source;
@@ -169,24 +172,24 @@ var statsCollector = function(req, res) {
         }
 
         console.log(redis_result); // Logging redis data to check.
-        redis.set(store[eve].device_id, JSON.stringify(redis_result)); // Never expired details about user.
+        redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
-        store[eve].event_day = currentUTCTime.toLocaleString().split(',')[0];
-        store[eve].event_day_ist = currentISTTime.toLocaleString().split(',')[0];
-        store[eve].advertiser_id_met = store[eve].advertiser_id;
-        store[eve].device_id_met = store[eve].device_id;
-        store[eve].seller_met = store[eve].event_properties.Seller;
-        store[eve].brand_met = store[eve].event_properties['Brand Name'];
-        store[eve].product_size_met = store[eve].event_properties.Size;
+        user_event.event_day = currentUTCTime.toLocaleString().split(',')[0];
+        user_event.event_day_ist = currentISTTime.toLocaleString().split(',')[0];
+        user_event.advertiser_id_met = user_event.advertiser_id;
+        user_event.device_id_met = user_event.device_id;
+        user_event.seller_met = user_event.event_properties.Seller;
+        user_event.brand_met = user_event.event_properties['Brand Name'];
+        user_event.product_size_met = user_event.event_properties.Size;
 
-        var temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store[eve]), partition: 0 };
+        var temp_obj = { topic: "vnk-clst", messages: JSON.stringify(user_event), partition: 0 };
         payloads.push(temp_obj);
-    }
-
-    producer.send(payloads, function(err, data){
-        console.log(data);
-        return res.status(200).json({ "status": false, "message": "OK" });
     });
+
+    // producer.send(payloads, function(err, data){
+    //     // console.log(data);
+    //     return res.status(200).json({ "status": false, "message": "OK" });
+    // });
 
     producer.on('error', function(err){
         // console.log(err);
