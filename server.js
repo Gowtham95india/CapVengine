@@ -67,7 +67,6 @@ var statsCollector = function(req, res) {
     var date = new Date().toISOString().toString('utf8');
     try {
         var store = JSON.parse(JSON.stringify(req.body).toString('utf8').replace("'",'"'));
-    console.log(store);
         store = JSON.parse(store.e); // Getting events list
     }
     catch (e) {
@@ -98,14 +97,13 @@ var statsCollector = function(req, res) {
         // Tweaking for location data if lat is not present.
         if(!user_event.lat){
             clientIp = getClientAddress(req);
-            getClientLocation("121.244.122.142", function(resp) {
+            getClientLocation(clientIp, function(resp) {
 
                 user_event.country = user_event.country || resp.country_name;
                 user_event.region = user_event.region || resp.region_name;
                 user_event.city = user_event.city || resp.city;
                 user_event.lat = user_event.lat || resp.latitude;
                 user_event.lng =  user_event.lng || resp.longitude;
-                console.log(user_event);
 
             });
 
@@ -126,15 +124,12 @@ var statsCollector = function(req, res) {
 
         // Call get on redis only once and store it.
         var redis_result;
+        // Should be this way. Seriously don't play with it.
         redis.get(user_event.device_id).then(function update_user_event(jredis_result) {
 
             redis_result = JSON.parse(jredis_result);
 
-            console.log("Lets Check Redis" + JSON.stringify(redis_result));
-
             if(user_event.event_type == "Session-Started") {
-
-                console.log(redis_result);
 
                 // Redis data should be updated with current app session details.
                 redis_result.medium = user_event.event_properties.utm_medium = medium;
@@ -146,6 +141,7 @@ var statsCollector = function(req, res) {
                 console.log("Inside Session-Started");
                 console.log(redis_result);
 
+                // No need to write for every event Except this and the one below.
                 redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
             }
@@ -163,14 +159,12 @@ var statsCollector = function(req, res) {
                     redis_result.user_installed_source = redis_result.source;
                     redis_result.user_installed_campaign = redis_result.campaign;
 
+                    // No need to write for every event Except this and the one above.
                     redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
                 }
             }
         
-            console.log(redis_result); // Logging redis data to check.
-            
-
         });
 
         
