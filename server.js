@@ -16,8 +16,17 @@ app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodie
 
 var kafka = require('kafka-node'),
     Producer = kafka.Producer,
-    client = new kafka.Client('34.154.148.149:2181'),
+    client = new kafka.Client('35.154.148.49:2181'),
     producer = new Producer(client);
+
+producer.on('ready', function () {
+    console.log("Kafka is Ready. I can produce now!")    
+});
+
+// This is the error event propagates from internal client.
+producer.on('error', function(err){
+    console.log("internal Producer Error!" + err);
+});
 
 app.listen(port);
 console.log('Server started! At http://localhost:' + port);
@@ -40,7 +49,6 @@ var getClientLocation = function (ipaddress, callback) {
 // If timestamp is not present, returns ISO format current timestamp.
 var getTimeStamp = function(timestamp) {
 
-    // If no timestamp given, should return current timestamp.
     if(timestamp) {
 
         // Only realtime events. Convert timestamp to ISOstring format.
@@ -62,6 +70,7 @@ var getTimeStamp = function(timestamp) {
 }
 
 var statsCollector = function(req, res) {
+
     // console.log(req.body);
     // console.log(req.get('content-type'));
     var date = new Date().toISOString().toString('utf8');
@@ -74,12 +83,14 @@ var statsCollector = function(req, res) {
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
-    payloads = [];
+    var payloads = [];
 
-    store.forEach(function(user_event) {
+    // variable user_event bounded to this call. Not possible with for loop.
+    store.forEach(function(user_event) { // Dont' messup with this one. 
 
         var timestamp = getTimeStamp(user_event.timestamp)
         user_event.timestamp = new Date(timestamp).toISOString().toString('utf8');
+        
         // Uncomment the following just in case to capture older events.
         // user_event.timestamp = new Date().toISOString().toString('utf8'); // Setting timestamp to current time.
 
@@ -97,7 +108,7 @@ var statsCollector = function(req, res) {
         // Tweaking for location data if lat is not present.
         if(!user_event.lat){
             clientIp = getClientAddress(req);
-            getClientLocation("121.244.122.142", function(resp) {
+            getClientLocation(clientIp, function(resp) {
 
                 user_event.country = user_event.country || resp.country_name;
                 user_event.region = user_event.region || resp.region_name;
@@ -112,6 +123,7 @@ var statsCollector = function(req, res) {
         var medium = user_event.event_properties.utm_medium
         var source = user_event.event_properties.utm_source
         var campaign = user_event.event_properties.utm_campaign
+        
         // Correcting UTM Sources from App Event
         if (!medium && !campaign && !source){
           medium = source = campaign = "Direct"
@@ -124,6 +136,7 @@ var statsCollector = function(req, res) {
 
         // Call get on redis only once and store it.
         var redis_result;
+        
         // Should be this way. Seriously don't play with it.
         redis.get(user_event.device_id).then(function update_user_event(jredis_result) {
 
@@ -152,6 +165,7 @@ var statsCollector = function(req, res) {
                 user_event.email = user_event.email || redis_result.email;
 
                 if (user_event.event_type == "NEW_APP_INSTALLS"){
+                    
                     // Helps in deciding the uninstalls attributions %.
                     redis_result.user_installed_medium = redis_result.medium;
                     redis_result.user_installed_source = redis_result.source;
@@ -162,10 +176,7 @@ var statsCollector = function(req, res) {
 
                 }
             }
-        
         });
-
-        
 
         user_event.event_day = currentUTCTime.toLocaleString().split(',')[0];
         user_event.event_day_ist = currentISTTime.toLocaleString().split(',')[0];
@@ -175,29 +186,19 @@ var statsCollector = function(req, res) {
         user_event.brand_met = user_event.event_properties['Brand Name'];
         user_event.product_size_met = user_event.event_properties.Size;
 
-        var temp_obj = { topic: "vnk-clst", messages: JSON.stringify(user_event), partition: 0 };
+        var temp_obj = { topic: "vnk-clst", messages: JSON.stringify(user_event) };
         payloads.push(temp_obj);
+
     });
 
-    // producer.send(payloads, function(err, data){
-    //     // console.log(data);
-    //     return res.status(200).json({ "status": false, "message": "OK" });
-    // });
-
-    producer.on('error', function(err){
-        // console.log(err);
-        // return res.status(500).json({ "status": false, "message": "Broker Not Available" });
-    })
-
-    res.end();
-
+    producer.send(payloads, function(err, data){
+        console.log(data);
+        if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
+        else return res.status(200).json({ "status": true, "message": "OK"});
+    });
 }
 
-
-app.post('/user-activity-poc', statsCollector);
-app.post('/stats', statsCollector);
-
-app.post('/fireme',function(req, res) {
+var vigeonCollector = function(req, res) {
 
     // console.log(req.body);
     try {
@@ -208,19 +209,7 @@ app.post('/fireme',function(req, res) {
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
-    // Call get on redis only once and use it for attribution.
-    var redis_result = "";
-    getRedisResult(store[eve].device_id, function(jresult){
-        result = JSON.parse(jresult);
-        redis_result = result;
-    });
-
-    store.event_properties.utm_medium = redis_result.medium;
-    store.event_properties.utm_source = redis_result.source;
-    store.event_properties.utm_campaign = redis_result.campaign;
-    store.advertiser_id = redis_result.advertiser_id;
-
-    payloads = [];
+    var payloads = [];
 
     store.timestamp = getTimeStamp(); // Should be tagged with current timestamp.
 
@@ -232,18 +221,45 @@ app.post('/fireme',function(req, res) {
     store.advertiser_id_met = store.advertiser_id;
     store.device_id_met = store.device_id;
 
-    temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store), partition: 0 };
-    payloads.push(temp_obj);
+
+    // Call get on redis only once and use it for attribution.
+    var redis_result;
+    redis.get(store.device_id).then(function(jresult){
+        redis_result = JSON.parse(jresult);
+        console.log(redis_result);
+        if (store.event_type == "UNINSTALLS") {
+
+            // Attributing user installed UTM Params.
+            store.event_properties.utm_medium = redis_result.user_installed_medium;
+            store.event_properties.utm_source = redis_result.user_installed_source;
+            store.event_properties.utm_campaign = redis_result.user_installed_campaign;
+            store.advertiser_id = redis_result.advertiser_id;
+
+        }
+        else {
+
+            // Tagging last user session UTM Params.
+            store.event_properties.utm_medium = redis_result.medium;
+            store.event_properties.utm_source = redis_result.source;
+            store.event_properties.utm_campaign = redis_result.campaign;
+
+        }
+
+        temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store)};
+        payloads.push(temp_obj);
+        console.log(payloads);
+        console.log("I'm Done!");
 
     producer.send(payloads, function(err, data){
-            console.log(data);
+        console.log(data);
+        if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
+        else return res.status(200).json({ "status": true, "message": "OK"});
+    });
+    
     });
 
-    producer.on('error', function(err){
-        console.log(err);
-        return res.status(500).json({ "status": false, "message": "Broker Not Available" });
-    })
+}
 
-    res.end();
-
-});
+app.post('/user-activity-poc', statsCollector);
+app.post('/stats', statsCollector);
+app.post('/fireme', vigeonCollector);
