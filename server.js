@@ -97,7 +97,7 @@ var statsCollector = function(req, res) {
         // Tweaking for location data if lat is not present.
         if(!user_event.lat){
             clientIp = getClientAddress(req);
-            getClientLocation(clientIp, function(resp) {
+            getClientLocation("121.244.122.142", function(resp) {
 
                 user_event.country = user_event.country || resp.country_name;
                 user_event.region = user_event.region || resp.region_name;
@@ -138,8 +138,6 @@ var statsCollector = function(req, res) {
                 redis_result.user_id = user_event.user_id = user_event.user_id || redis_result.user_id;
                 redis_result.email = user_event.email = user_event.email || redis_result.email;
                 redis_result.advertiser_id = user_event.advertiser_id || redis_result.advertiser_id;
-                console.log("Inside Session-Started");
-                console.log(redis_result);
 
                 // No need to write for every event Except this and the one below.
                 redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
