@@ -39,15 +39,15 @@ var getClientLocation = function (ipaddress, callback) {
 
 var getRedisResult = function (device_id, callback) {
     // Call get on redis only once and store it.
-    redis.get(store[eve].device_id, function(jresult){
+    redis.get(device_id, function(jresult){
         result = JSON.parse(jresult);
-        return result;
+        return callback(result);
     });
 }
 
 // If timestamp is not present, returns ISO format current timestamp.
 var getTimeStamp = function(timestamp) {
-    
+
     // If no timestamp given, should return current timestamp.
     if(timestamp) {
 
@@ -75,6 +75,7 @@ var statsCollector = function(req, res) {
     var date = new Date().toISOString().toString('utf8');
     try {
         var store = JSON.parse(JSON.stringify(req.body).toString('utf8').replace("'",'"'));
+    console.log(store);
         store = JSON.parse(store.e); // Getting events list
     }
     catch (e) {
@@ -105,7 +106,8 @@ var statsCollector = function(req, res) {
         // Tweaking for location data if lat is not present.
         if(!store[eve].lat){
             clientIp = getClientAddress(req);
-            getClientLocation(clientIp, function(resp) {
+            getClientLocation("121.244.122.142", function(resp) {
+                console.log(resp);
                 store[eve].country = store[eve].country || resp.country_name;
                 store[eve].region = store[eve].region || resp.region_name;
                 store[eve].city = store[eve].city || resp.city;
@@ -116,24 +118,27 @@ var statsCollector = function(req, res) {
         }
 
         var medium = store[eve].event_properties.utm_medium
-        var source = sotre[eve].event_properties.utm_source
+        var source = store[eve].event_properties.utm_source
         var campaign = store[eve].event_properties.utm_campaign
         // Correcting UTM Sources from App Event
         if (!medium && !campaign && !source){
-          medium = source = campign = "Direct"
+          medium = source = campaign = "Direct"
         }
         else{
           medium = medium || source || campaign || "Direct"
           source = source || medium || campaign
-          campaign = campign || medium || source
+          campaign = campaign || medium || source
         }
 
         // Call get on redis only once and store it.
         var redis_result = "";
         getRedisResult(store[eve].device_id, function(jresult){
             result = JSON.parse(jresult);
-            redis_result = result;
+            if (result) redis_result = result;
+            else redis_result = {};
         });
+
+        console.log(redis_result);
 
         if(store[eve].event_type == "Session-Started") {
 
@@ -163,6 +168,7 @@ var statsCollector = function(req, res) {
             }
         }
 
+        console.log(redis_result); // Logging redis data to check.
         redis.set(store[eve].device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
         store[eve].event_day = currentUTCTime.toLocaleString().split(',')[0];
@@ -183,8 +189,8 @@ var statsCollector = function(req, res) {
     });
 
     producer.on('error', function(err){
-        console.log(err);
-        return res.status(500).json({ "status": false, "message": "Broker Not Available" });
+        // console.log(err);
+        // return res.status(500).json({ "status": false, "message": "Broker Not Available" });
     })
 
     res.end();
@@ -211,7 +217,7 @@ app.post('/fireme',function(req, res) {
     getRedisResult(store[eve].device_id, function(jresult){
         result = JSON.parse(jresult);
         redis_result = result;
-    });    
+    });
 
     store.event_properties.utm_medium = redis_result.medium;
     store.event_properties.utm_source = redis_result.source;
@@ -243,5 +249,5 @@ app.post('/fireme',function(req, res) {
     })
 
     res.end();
-    
+
 });
