@@ -3,6 +3,7 @@
   "main": "server.js",
   "dependencies": {
     "@newrelic/native-metrics": "^1.0.0",
+    "bluebird": "^3.4.7",
     "csvtojson": "^1.0.2",
     "express": "~4.10.2",
     "ioredis": "^2.5.0",

@@ -5,6 +5,8 @@ var bodyParser = require('body-parser');
 var fs = require("fs");
 var freegeoip = require('node-freegeoip');
 
+const Promise = require('bluebird');
+
 var Redis = require('ioredis');
 var redis = new Redis();
 
@@ -16,7 +18,7 @@ app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodie
 
 var kafka = require('kafka-node'),
     Producer = kafka.Producer,
-    client = new kafka.Client('35.154.148.49:2181'),
+    client = new kafka.Client('35.154.159.57:2181'),
     producer = new Producer(client);
 
 producer.on('ready', function () {
@@ -164,7 +166,7 @@ var statsCollector = function(req, res) {
                 user_event.user_id = user_event.user_id || redis_result.user_id;
                 user_event.email = user_event.email || redis_result.email;
 
-                if (user_event.event_type == "NEW_APP_INSTALLS"){
+                if (user_event.event_type == "NEW_APP_INSTALLS") {
                     
                     // Helps in deciding the uninstalls attributions %.
                     redis_result.user_installed_medium = redis_result.medium;
@@ -186,7 +188,7 @@ var statsCollector = function(req, res) {
         user_event.brand_met = user_event.event_properties['Brand Name'];
         user_event.product_size_met = user_event.event_properties.Size;
 
-        var temp_obj = { topic: "vnk-clst", messages: JSON.stringify(user_event) };
+        var temp_obj = { topic: "vnk-test", messages: JSON.stringify(user_event) };
         payloads.push(temp_obj);
 
     });
@@ -209,7 +211,7 @@ var vigeonCollector = function(req, res) {
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
-    var payloads = [];
+    let tasks = [];
 
     store.timestamp = getTimeStamp(); // Should be tagged with current timestamp.
 
@@ -224,7 +226,7 @@ var vigeonCollector = function(req, res) {
 
     // Call get on redis only once and use it for attribution.
     var redis_result;
-    redis.get(store.device_id).then(function(jresult){
+    let task = redis.get(store.device_id).then(function(jresult){
         redis_result = JSON.parse(jresult);
         console.log(redis_result);
         if (store.event_type == "UNINSTALLS") {
@@ -244,17 +246,20 @@ var vigeonCollector = function(req, res) {
             store.event_properties.utm_campaign = redis_result.campaign;
 
         }
-
-        temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store)};
-        payloads.push(temp_obj);
-        console.log(payloads);
-        console.log("I'm Done!");
-
-    producer.send(payloads, function(err, data){
-        console.log(data);
-        if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
-        else return res.status(200).json({ "status": true, "message": "OK"});
+        
+        let temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store)};
+        return temp_obj;
     });
+
+    tasks.push(task);
+
+    Promise.all(tasks).then(function(payloads){
+
+        producer.send(payloads, function(err, data){
+            console.log(data);
+            if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
+            else return res.status(200).json({ "status": true, "message": "OK"});
+        });
     
     });
 
