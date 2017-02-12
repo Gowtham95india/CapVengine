@@ -85,7 +85,7 @@ var statsCollector = function(req, res) {
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
-    var payloads = [];
+    let tasks = [];
 
     // variable user_event bounded to this call. Not possible with for loop.
     store.forEach(function(user_event) { // Dont' messup with this one. 
@@ -126,6 +126,7 @@ var statsCollector = function(req, res) {
         var source = user_event.event_properties.utm_source
         var campaign = user_event.event_properties.utm_campaign
         
+        console.log(medium+source+campaign);
         // Correcting UTM Sources from App Event
         if (!medium && !campaign && !source){
           medium = source = campaign = "Direct"
@@ -140,7 +141,7 @@ var statsCollector = function(req, res) {
         var redis_result;
         
         // Should be this way. Seriously don't play with it.
-        redis.get(user_event.device_id).then(function update_user_event(jredis_result) {
+        let task = redis.get(user_event.device_id).then(function update_user_event(jredis_result) {
 
             redis_result = JSON.parse(jredis_result);
 
@@ -178,26 +179,36 @@ var statsCollector = function(req, res) {
 
                 }
             }
+
+            user_event.event_day = currentUTCTime.toLocaleString().split(',')[0];
+            user_event.event_day_ist = currentISTTime.toLocaleString().split(',')[0];
+            user_event.advertiser_id_met = user_event.advertiser_id;
+            user_event.device_id_met = user_event.device_id;
+            user_event.seller_met = user_event.event_properties.Seller;
+            user_event.brand_met = user_event.event_properties['Brand Name'];
+            user_event.product_size_met = user_event.event_properties.Size;
+
+            let temp_obj = JSON.stringify(user_event)
+            return temp_obj;
+
         });
 
-        user_event.event_day = currentUTCTime.toLocaleString().split(',')[0];
-        user_event.event_day_ist = currentISTTime.toLocaleString().split(',')[0];
-        user_event.advertiser_id_met = user_event.advertiser_id;
-        user_event.device_id_met = user_event.device_id;
-        user_event.seller_met = user_event.event_properties.Seller;
-        user_event.brand_met = user_event.event_properties['Brand Name'];
-        user_event.product_size_met = user_event.event_properties.Size;
-
-        var temp_obj = { topic: "vnk-test", messages: JSON.stringify(user_event) };
-        payloads.push(temp_obj);
+        tasks.push(task);
 
     });
 
-    producer.send(payloads, function(err, data){
-        console.log(data);
-        if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
-        else return res.status(200).json({ "status": true, "message": "OK"});
+    Promise.all(tasks).then(function(payloads){
+
+        var data_to_send = [{ topic: "vnk-test", messages: payloads}];
+
+        producer.send(data_to_send, function(err, data){
+            console.log(data);
+            if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
+            else return res.status(200).json({ "status": true, "message": "OK"});
+        });
+    
     });
+
 }
 
 var vigeonCollector = function(req, res) {
@@ -247,7 +258,7 @@ var vigeonCollector = function(req, res) {
 
         }
         
-        let temp_obj = { topic: "vnk-clst", messages: JSON.stringify(store)};
+        let temp_obj = JSON.stringify(store);
         return temp_obj;
     });
 
@@ -255,7 +266,9 @@ var vigeonCollector = function(req, res) {
 
     Promise.all(tasks).then(function(payloads){
 
-        producer.send(payloads, function(err, data){
+        var data_to_send = [{ topic: "vnk-test", messages: payloads}];
+
+        producer.send(data_to_send, function(err, data){
             console.log(data);
             if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
             else return res.status(200).json({ "status": true, "message": "OK"});
