@@ -126,7 +126,6 @@ var statsCollector = function(req, res) {
         var source = user_event.event_properties.utm_source
         var campaign = user_event.event_properties.utm_campaign
         
-        console.log(medium+source+campaign);
         // Correcting UTM Sources from App Event
         if (!medium && !campaign && !source){
           medium = source = campaign = "Direct"
@@ -227,6 +226,7 @@ var vigeonCollector = function(req, res) {
     store.timestamp = getTimeStamp(); // Should be tagged with current timestamp.
 
     // Adding event_day IST and UTC format.
+    console.log(store.timestamp);
     var currentUTCTime = new Date();
     var currentISTTime = new Date(currentUTCTime.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
     store.event_day = currentUTCTime.toLocaleString().split(',')[0];
@@ -239,7 +239,7 @@ var vigeonCollector = function(req, res) {
     var redis_result;
     let task = redis.get(store.device_id).then(function(jresult){
         redis_result = JSON.parse(jresult);
-        console.log(redis_result);
+
         if (store.event_type == "UNINSTALLS") {
 
             // Attributing user installed UTM Params.
