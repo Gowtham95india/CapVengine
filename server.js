@@ -8,7 +8,7 @@ var freegeoip = require('node-freegeoip');
 const Promise = require('bluebird');
 
 var Redis = require('ioredis');
-var redis = new Redis();
+var redis = new Redis(process.env.REDIS_HOST);
 
 var Converter = require("csvtojson").Converter;
 var converter = new Converter({});
