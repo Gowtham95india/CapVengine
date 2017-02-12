@@ -18,7 +18,7 @@ app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodie
 
 var kafka = require('kafka-node'),
     Producer = kafka.Producer,
-    client = new kafka.Client('35.154.159.57:2181'),
+    client = new kafka.Client(process.env.ZK_HOST),
     producer = new Producer(client);
 
 producer.on('ready', function () {
