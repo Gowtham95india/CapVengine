@@ -11,9 +11,6 @@ const Promise = require('bluebird');
 var Redis = require('ioredis');
 var redis = new Redis('10.2.1.171');
 
-var Converter = require("csvtojson").Converter;
-var converter = new Converter({});
-
 app.use(bodyParser.json());     // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodies
 
