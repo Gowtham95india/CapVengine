@@ -8,8 +8,8 @@ var freegeoip = require('node-freegeoip');
 
 const Promise = require('bluebird');
 
-var mongo_monk = require('monk')('localhost/capeve');
-const monk = mongo_monk.get('users')
+var Redis = require('ioredis');
+var redis = new Redis('10.2.1.171');
 
 var Converter = require("csvtojson").Converter;
 var converter = new Converter({});
@@ -33,6 +33,10 @@ producer.on('error', function(err){
 
 app.listen(port);
 console.log('Server started! At http://localhost:' + port);
+
+redis.on("connect", function(res){      
+    console.log("Redis started! Ready to perform");     
+});
 
 var getClientAddress = function (req) {
     return req.get('x-real-ip') || (req.get('x-forwarded-for') || '').split(',')[0]  || req.connection.remoteAddress;
@@ -82,9 +86,9 @@ var statsCollector = function(req, res) {
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
-    monk.get(user_event.device_id).then(function update_user_event(jmonk_result) {
+    redis.get(store[0].device_id).then(function update_user_event(jredis_result) 
 
-        monk_result = JSON.parse(jmonk_result) || {};
+        redis_result = JSON.parse(jredis_result) || {};
 
         payloads = [];
 
@@ -140,34 +144,34 @@ var statsCollector = function(req, res) {
                 if(user_event.event_type == "Session-Started") {
 
                     // Redis data should be updated with current app session details.
-                    monk_result.medium = user_event.event_properties.utm_medium = medium;
-                    monk_result.source = user_event.event_properties.utm_source = source;
-                    monk_result.campaign = user_event.event_properties.utm_campaign = campaign;
-                    monk_result.user_id = user_event.user_id = user_event.user_id || monk_result.user_id;
-                    monk_result.email = user_event.email = user_event.email || monk_result.email;
-                    monk_result.advertiser_id = user_event.advertiser_id || monk_result.advertiser_id;
+                    redis_result.medium = user_event.event_properties.utm_medium = medium;
+                    redis_result.source = user_event.event_properties.utm_source = source;
+                    redis_result.campaign = user_event.event_properties.utm_campaign = campaign;
+                    redis_result.user_id = user_event.user_id = user_event.user_id || redis_result.user_id;
+                    redis_result.email = user_event.email = user_event.email || redis_result.email;
+                    redis_result.advertiser_id = user_event.advertiser_id || redis_result.advertiser_id;
 
                     // No need to write for every event Except this and the one below.
-                    redis.set(user_event.device_id, JSON.stringify(monk_result)); // Never expired details about user.
+                    redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
                 }
                 else {
 
-                    user_event.event_properties.utm_medium = monk_result.medium || medium;
-                    user_event.event_properties.utm_source = monk_result.source || source;
-                    user_event.event_properties.utm_campaign = monk_result.campaign || campaign;
-                    user_event.user_id = user_event.user_id || monk_result.user_id || 0;
-                    user_event.email = user_event.email || monk_result.email || "";
+                    user_event.event_properties.utm_medium = redis_result.medium || medium;
+                    user_event.event_properties.utm_source = redis_result.source || source;
+                    user_event.event_properties.utm_campaign = redis_result.campaign || campaign;
+                    user_event.user_id = user_event.user_id || redis_result.user_id || 0;
+                    user_event.email = user_event.email || redis_result.email || "";
 
                     if (user_event.event_type == "NEW_APP_INSTALLS") {
 
                         // Helps in deciding the uninstalls attributions %.
-                        monk_result.user_installed_medium = monk_result.medium || medium;
-                        monk_result.user_installed_source = monk_result.source || source;
-                        monk_result.user_installed_campaign = monk_result.campaign || campaign;
+                        redis_result.user_installed_medium = redis_result.medium || medium;
+                        redis_result.user_installed_source = redis_result.source || source;
+                        redis_result.user_installed_campaign = redis_result.campaign || campaign;
 
                         // No need to write for every event Except this and the one above.
-                        redis.set(user_event.device_id, JSON.stringify(monk_result)); // Never expired details about user.
+                        redis.set(user_event.device_id, JSON.stringify(redis_result)); // Never expired details about user.
 
                     }
                 }
@@ -228,16 +232,16 @@ var vigeonCollector = function(req, res) {
     if (store.event_type == "UNINSTALL") {
         
         // Call get on redis only once and use it for attribution.
-        var monk_result;
+        var redis_result;
         let task = monk.get(store.device_id).then(function(jresult){
 
-            monk_result = JSON.parse(jresult) || {};
+            redis_result = JSON.parse(jresult) || {};
 
                 // Attributing user installed UTM Params.
-                store.event_properties.utm_medium = monk_result.user_installed_medium;
-                store.event_properties.utm_source = monk_result.user_installed_source;
-                store.event_properties.utm_campaign = monk_result.user_installed_campaign;
-                store.advertiser_id = monk_result.advertiser_id;
+                store.event_properties.utm_medium = redis_result.user_installed_medium;
+                store.event_properties.utm_source = redis_result.user_installed_source;
+                store.event_properties.utm_campaign = redis_result.user_installed_campaign;
+                store.advertiser_id = redis_result.advertiser_id;
 
             let temp_obj = JSON.stringify(store);
             return temp_obj;
