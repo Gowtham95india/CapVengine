@@ -9,7 +9,7 @@ var freegeoip = require('node-freegeoip');
 const Promise = require('bluebird');
 
 var Redis = require('ioredis');
-var redis = new Redis('10.2.1.171');
+var redis = new Redis();
 
 var Converter = require("csvtojson").Converter;
 var converter = new Converter({});
@@ -19,7 +19,7 @@ app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodie
 
 var kafka = require('kafka-node'),
     Producer = kafka.HighLevelProducer,
-    client = new kafka.Client('10.2.1.239:2181'),
+    client = new kafka.Client('35.154.145.181:2181'),
     producer = new Producer(client);
 
 producer.on('ready', function () {
@@ -86,9 +86,9 @@ var statsCollector = function(req, res) {
         return res.status(422).json({"status":false, "message":"Unparsble JSON"});
     }
 
-    redis.get(store[0].device_id).then(function update_user_event(jredis_result) 
+    redis.get(store[0].device_id).then(function update_user_event(jredis_result) {
 
-        redis_result = JSON.parse(jredis_result) || {};
+        var redis_result = JSON.parse(jredis_result) || {};
 
         payloads = [];
 
@@ -189,7 +189,7 @@ var statsCollector = function(req, res) {
 
         });
 
-        var data_to_send = [{ topic: "vnk-clst", messages: payloads}];
+        var data_to_send = [{ topic: "vnk-test", messages: payloads}];
 
         producer.send(data_to_send, function(err, data){
             console.log(data);
@@ -233,7 +233,7 @@ var vigeonCollector = function(req, res) {
         
         // Call get on redis only once and use it for attribution.
         var redis_result;
-        let task = monk.get(store.device_id).then(function(jresult){
+        let task = redis.get(store.device_id).then(function(jresult){
 
             redis_result = JSON.parse(jresult) || {};
 
@@ -263,11 +263,6 @@ var vigeonCollector = function(req, res) {
     }
     else {
  
-        // Tagging last user session UTM Params.
-        store.event_properties.utm_medium = redis_result.medium || "";
-        store.event_properties.utm_source = redis_result.source || "" ;
-        store.event_properties.utm_campaign = redis_result.campaign || "";
-
         var temp_obj = JSON.stringify(store);
         var data_to_send = [{ topic: "vnk-clst", messages: temp_obj}];
 
@@ -318,7 +313,6 @@ var EventsCollector = function(req, res){
         else return res.status(200).json({ "status": true, "message": "OK"});
 
     });
-
 
 }
 
