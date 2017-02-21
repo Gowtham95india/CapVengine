@@ -239,48 +239,56 @@ var vigeonCollector = function(req, res) {
         console.log("Event Properties Missing!");
     }
 
-    // Call get on redis only once and use it for attribution.
-    var redis_result;
-    let task = redis.get(store.device_id).then(function(jresult){
+    if (store.event_type == "UNINSTALL") {
+        
+        // Call get on redis only once and use it for attribution.
+        var redis_result;
+        let task = redis.get(store.device_id).then(function(jresult){
 
-        redis_result = JSON.parse(jresult) || {};
+            redis_result = JSON.parse(jresult) || {};
 
-        if (store.event_type == "UNINSTALLS") {
+                // Attributing user installed UTM Params.
+                store.event_properties.utm_medium = redis_result.user_installed_medium;
+                store.event_properties.utm_source = redis_result.user_installed_source;
+                store.event_properties.utm_campaign = redis_result.user_installed_campaign;
+                store.advertiser_id = redis_result.advertiser_id;
 
-            // Attributing user installed UTM Params.
-            store.event_properties.utm_medium = redis_result.user_installed_medium;
-            store.event_properties.utm_source = redis_result.user_installed_source;
-            store.event_properties.utm_campaign = redis_result.user_installed_campaign;
-            store.advertiser_id = redis_result.advertiser_id;
+            let temp_obj = JSON.stringify(store);
+            return temp_obj;
+        });
 
-        }
-        else {
+        tasks.push(task);
 
-            // Tagging last user session UTM Params.
-            store.event_properties.utm_medium = redis_result.medium || "";
-            store.event_properties.utm_source = redis_result.source || "" ;
-            store.event_properties.utm_campaign = redis_result.campaign || "";
+        Promise.all(tasks).then(function(payloads){
 
-        }
+            var data_to_send = [{ topic: "vnk-clst", messages: payloads}];
 
-        let temp_obj = JSON.stringify(store);
-        return temp_obj;
-    });
+            producer.send(data_to_send, function(err, data){
+                console.log(data);
+                if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
+                else return res.status(200).json({ "status": true, "message": "OK"});
+            });
 
-    tasks.push(task);
+        });
+    }
+    else {
+ 
+        // Tagging last user session UTM Params.
+        store.event_properties.utm_medium = redis_result.medium || "";
+        store.event_properties.utm_source = redis_result.source || "" ;
+        store.event_properties.utm_campaign = redis_result.campaign || "";
 
-    Promise.all(tasks).then(function(payloads){
-
-        var data_to_send = [{ topic: "vnk-clst", messages: payloads}];
+        var temp_obj = JSON.stringify(store);
+        var data_to_send = [{ topic: "vnk-clst", messages: temp_obj}];
 
         producer.send(data_to_send, function(err, data){
+        
             console.log(data);
             if (err) return res.status(503).json({ "status": false, "message": "503 Service Unavailable", "error": err });
             else return res.status(200).json({ "status": true, "message": "OK"});
+
         });
-
-    });
-
+    }
 }
 
 app.post('/user-activity-poc', statsCollector);
