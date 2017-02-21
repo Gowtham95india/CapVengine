@@ -1,4 +1,4 @@
-
+var nr = require('newrelic');
 var express  = require('express');
 app = express();
 var port = process.env.PORT || 8080;
@@ -9,7 +9,7 @@ var freegeoip = require('node-freegeoip');
 const Promise = require('bluebird');
 
 var Redis = require('ioredis');
-var redis = new Redis();
+var redis = new Redis('10.2.1.171');
 
 var Converter = require("csvtojson").Converter;
 var converter = new Converter({});
@@ -19,7 +19,7 @@ app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodie
 
 var kafka = require('kafka-node'),
     Producer = kafka.HighLevelProducer,
-    client = new kafka.Client('35.154.145.181:2181'),
+    client = new kafka.Client('10.2.1.239:2181'),
     producer = new Producer(client);
 
 producer.on('ready', function () {
