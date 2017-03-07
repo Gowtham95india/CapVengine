@@ -1,12 +1,15 @@
 #!/usr/bin/python3
 import ujson
 
-
 from sanic import Sanic
 from sanic.response import json as json_parser
 from urllib.parse import unquote, parse_qs
 
-app = Sanic()
+# Blueprints
+from kafka_blueprint import kafka_bp
+
+app = Sanic(__name__)
+app.blueprint(kafka_bp)
 
 @app.route("/stats", methods=['POST'])
 @app.route("/user-activity-poc", methods=['POST'])
@@ -23,9 +26,10 @@ async def StatsCollector(request):
 			return json_parser(status=422, body={"status": False, "message": "Unparsble JSON"})
 
 	raw_data = {'topic': 'vnk-clst', 'routes': 'clst/android', 'messages': jevents}
-	producer.send("vnk-raw", raw_data)
-
-	return json_parser({"status": True, "message": "OK"})
+	
+	x= app.producer.send("vnk-raw", raw_data)
+	return json_parser(x.get(timeout=1))
+	# return json_parser({"status": True, "message": "OK"})
 
 @app.route("/fireme", methods=['POST'])
 async def VigeonCollector(request):

@@ -89,7 +89,7 @@ var vigeonCollector = function(req, res) {
 }
 
 
-var eventsCollector = function(req, res){
+var errventsCollector = function(req, res){
 
     var date = new Date().toISOString().toString('utf8');
     try {
