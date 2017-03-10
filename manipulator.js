@@ -9,7 +9,7 @@ var freegeoip = require('node-freegeoip');
 const Promise = require('bluebird');
 
 var Redis = require('ioredis');
-var redis = new Redis();
+var redis = new Redis('10.2.1.19');
 
 app.use(bodyParser.json());     // support json encoded bodies
 app.use(bodyParser.urlencoded({ extended: false }));    // support encoded bodies
@@ -19,7 +19,7 @@ console.log('Server started! At http://localhost:' + port);
 
 var kafka = require('kafka-node'),
     Producer = kafka.HighLevelProducer,
-    client = new kafka.Client("35.154.145.181:2181"),
+    client = new kafka.Client("10.2.1.239:2181"),
     producer = new Producer(client);
 
 producer.on('ready', function () {
@@ -27,7 +27,7 @@ producer.on('ready', function () {
 });
 
 var options = {
-  host: '35.154.145.181:2181',
+  host: '10.2.1.239:2181',
   groupId: 'node-attributor',
   sessionTimeout: 15000,
   // An array of partition assignment protocols ordered by preference.
@@ -76,15 +76,14 @@ var getTimeStamp = function(timestamp) {
     }
 }
 
+
 var onMessage = function (message) {
 
     // console.log(req.body);
     // console.log(req.get('content-type'));
     var raw_json = message.value;
     var raw_data = JSON.parse(raw_json);
-    var store = raw_data.messages;
-
-     console.log(raw_data);
+    var store = raw_data.messages || raw_data.params.messages;
 
     // Adding event_day IST and UTC format.
     var currentUTCTime = new Date();
@@ -96,7 +95,7 @@ var onMessage = function (message) {
 
     var payloads = [];
 
-    if (raw_data.topic == "vnk-desd"){
+    if (raw_data.headers['service-name'] == "discovery_engine"){
 
 
         store.forEach(function(user_event){
@@ -110,17 +109,16 @@ var onMessage = function (message) {
             payloads.push(JSON.stringify(user_event));
 
         });
+
+        var data_to_send = [{ topic: 'vnk-desd', messages: payloads}];
+
+        producer.send(data_to_send, function(err, data){
+            if (err) return redis.set('incr','failed_count')
+        });
+
     }
 
     else {
-
-        try {
-            device_id = store[0].device_id
-        }
-        catch(e){
-            console.log("Device ID is invalid");
-            return false;
-        }
 
         redis.get(store[0].device_id).then(function update_user_event(jredis_result) {
 
@@ -218,19 +216,20 @@ var onMessage = function (message) {
 
             });
 
-        var data_to_send = [{ topic: raw_data.topic, messages: payloads}];
+            var data_to_send = [{ topic: raw_data.topic, messages: payloads}];
 
-        producer.send(data_to_send, function(err, data){
-            console.log(data);
-            if (err) return redis.set('incr','failed_count')
-        });
-
+            producer.send(data_to_send, function(err, data){
+                if (err) return redis.set('incr','failed_count')
+            });
 
         });
     }
 
-    
+
 
 }
-consumer.on('message', onMessage);
+consumer.on('message', nr.createWebTransaction('vnk-raw', function (message) {
+    onMessage(message);
+    nr.endTransaction();
+}));
 app.post('/stats', onMessage);
